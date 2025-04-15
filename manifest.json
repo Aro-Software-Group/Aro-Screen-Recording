@@ -1,0 +1,13 @@
+{
+  "name": "Aro Screen Recording 2.0",
+  "short_name": "AroRec2.0",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#e9eafc",
+  "theme_color": "#e9eafc",
+  "description": "高品質・高機能なWeb画面録画サービス",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

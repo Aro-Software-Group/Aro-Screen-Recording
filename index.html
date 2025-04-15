@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aro Screen Recording 2.0</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#e9eafc">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+    <div class="container">
+        <h1>Aro Screen Recording 2.0</h1>
+        <div class="controls">
+            <div class="input-group">
+                <label for="resolution">解像度 (アスペクト比):</label>
+                <select id="resolution">
+                    <option value="3840x2160">4K (3840x2160, 16:9)</option>
+                    <option value="2560x1440">QHD (2560x1440, 16:9)</option>
+                    <option value="1920x1080">1080p (1920x1080, 16:9)</option>
+                    <option value="1600x900">HD+ (1600x900, 16:9)</option>
+                    <option value="1280x720">HD (1280x720, 16:9)</option>
+                    <option value="1024x576">WSVGA (1024x576, 16:9)</option>
+                    <option value="800x600">SVGA (800x600, 4:3)</option>
+                    <option value="1280x960">SXGA- (1280x960, 4:3)</option>
+                    <option value="1024x768">XGA (1024x768, 4:3)</option>
+                </select>
+                <label for="fps">FPS:</label>
+                <select id="fps">
+                    <option value="30">30</option>
+                    <option value="60">60</option>
+                    <option value="120">120</option>
+                    <option value="144">144</option>
+                    <option value="165">165</option>
+                    <option value="240">240 (最高)</option>
+                </select>
+                <label for="format">形式:</label>
+                <select id="format">
+                    <option value="webm">WebM（推奨）</option>
+                    <option value="mp4">MP4（高互換）</option>
+                    <option value="gif">GIF（超軽量・短時間）</option>
+                    <option value="ogv">Ogg/Theora（軽量）</option>
+                </select>
+                <label for="mic">マイク音声:</label>
+                <input type="checkbox" id="mic" checked> 有効
+            </div>
+            <div class="button-group">
+                <button id="startBtn">録画開始</button>
+                <button id="pauseBtn" style="display:none">一時停止</button>
+                <button id="resumeBtn" style="display:none">再開</button>
+                <button id="stopBtn" disabled>録画停止</button>
+            </div>
+        </div>
+        <div id="progress-indicator">
+          <span id="recording-time">00:00</span>｜<span id="recording-size">0 MB</span>
+        </div>
+        <canvas id="audio-waveform" height="44" style="width:100%;max-width:800px;background:#f7faff;border-radius:10px;margin-bottom:12px;display:none;"></canvas>
+        <video id="preview" controls autoplay muted style="width:100%;max-width:800px;"></video>
+        <div id="history-container">
+            <h2>キャプチャー履歴</h2>
+            <ul id="history-list"></ul>
+            <h2>ダウンロード履歴</h2>
+            <ul id="download-list"></ul>
+        </div>
+        <a id="downloadLink" style="display:none;">動画をダウンロード(mp4)</a>
+        <div id="status"></div>
+        <button id="toggle-dark" style="position:absolute;top:18px;right:18px;">🌙/☀️</button>
+        <footer class="copyright">&copy; 2025 Aro Software Group</footer>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.5/dist/ffmpeg.min.js"></script>
+    <script src="main.js"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('sw.js');
+        });
+      }
+    </script>
+</body>
+</html>
