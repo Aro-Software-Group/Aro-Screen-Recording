@@ -17,6 +17,7 @@ const toggleDark = document.getElementById('toggle-dark');
 const audioWaveform = document.getElementById('audio-waveform');
 
 let mediaRecorder, recordedChunks = [], stream;
+let ffmpegInstance = null;
 let captureHistory = [];
 let downloadHistory = [];
 
@@ -123,7 +124,7 @@ async function setupPreview() {
             preview.srcObject = displayStream;
         }
     } catch (e) {
-        status && (status.textContent = 'プレビュー取得に失敗: ' + e.message);
+        status && (status.textContent = t('status_preview_fail') + e.message);
     }
 }
 setupPreview();
@@ -180,7 +181,7 @@ startBtn.onclick = async () => {
     const fps = Number(fpsSel.value);
     const format = formatSel.value;
     const useMic = micCheckbox && micCheckbox.checked;
-    status.textContent = '録画する画面・ウィンドウ・タブを選択してください';
+    status.textContent = t('status_select_screen');
     try {
         const displayStream = await navigator.mediaDevices.getDisplayMedia({
             video: {
@@ -190,6 +191,11 @@ startBtn.onclick = async () => {
                 colorSpace: 'rec2020',
             },
             audio: true
+        });
+        displayStream.getVideoTracks().forEach(t => {
+            t.addEventListener('ended', () => {
+                if (mediaRecorder && mediaRecorder.state === 'recording') stopBtn.click();
+            });
         });
         let audioStream = null;
         if (useMic) {
@@ -237,20 +243,20 @@ startBtn.onclick = async () => {
         // onstopはここで一度だけ
         mediaRecorder.onstop = () => handleStop(formatSel.value);
         mediaRecorder.onerror = e => {
-            status.textContent = '録画エラー: ' + (e.error ? e.error.message : e.message);
+            status.textContent = t('status_error_prefix') + (e.error ? e.error.message : e.message);
         };
         mediaRecorder.onpause = () => {
             pausedAt = Date.now();
             pauseBtn.disabled = true;
             resumeBtn.disabled = false;
-            status.textContent = '一時停止中...';
+            status.textContent = t('status_paused');
             showPauseResume('paused');
         };
         mediaRecorder.onresume = () => {
             totalPaused += Date.now() - pausedAt;
             pauseBtn.disabled = false;
             resumeBtn.disabled = true;
-            status.textContent = '録画中...';
+            status.textContent = t('status_recording');
             showPauseResume('recording');
         };
         mediaRecorder.start();
@@ -258,7 +264,7 @@ startBtn.onclick = async () => {
         stopBtn.disabled = false;
         pauseBtn.disabled = false;
         resumeBtn.disabled = true;
-        status.textContent = '録画中...';
+        status.textContent = t('status_recording');
         startTimer();
         // 音声波形セットアップ
         if (audioTracks.length > 0) {
@@ -267,7 +273,7 @@ startBtn.onclick = async () => {
             showWaveform(true);
         }
     } catch (e) {
-        status.textContent = '録画開始がキャンセルされました';
+        status.textContent = t('status_cancelled');
         resetState();
         showWaveform(false);
     }
@@ -299,7 +305,7 @@ stopBtn.onclick = () => {
     pauseBtn.disabled = true;
     resumeBtn.disabled = true;
     showPauseResume();
-    status.textContent = '録画停止中...';
+    status.textContent = t('status_stop');
     stopTimer();
     showWaveform(false);
 };
@@ -314,11 +320,11 @@ function addDownloadHistory(downloadUrl, timestamp) {
 }
 function renderHistory() {
     historyList.innerHTML = captureHistory.map(item =>
-        `<li><a href="${item.url}" target="_blank">${item.time} の録画</a></li>`
-    ).join('') || '<li>履歴なし</li>';
+        `<li><a href="${item.url}" target="_blank">${t('capture_entry').replace('{time}', item.time)}</a></li>`
+    ).join('') || `<li>${t('history_none')}</li>`;
     downloadList.innerHTML = downloadHistory.map(item =>
-        `<li><a href="${item.url}" download> ${item.time} にダウンロード</a></li>`
-    ).join('') || '<li>履歴なし</li>';
+        `<li><a href="${item.url}" download> ${t('download_entry').replace('{time}', item.time)}</a></li>`
+    ).join('') || `<li>${t('history_none')}</li>`;
 }
 
 async function handleStop(format) {
@@ -327,11 +333,11 @@ async function handleStop(format) {
     let outType = 'webm';
     let outExt = 'webm';
     if (format === 'mp4' || format === 'gif' || format === 'ogv') {
-        status.textContent = '変換中...（少々お待ちください）';
+        status.textContent = t('status_converting');
         const { createFFmpeg, fetchFile } = FFmpeg;
-        const ffmpeg = createFFmpeg({ log: false });
-        if (!ffmpeg.isLoaded()) await ffmpeg.load();
-        ffmpeg.FS('writeFile', 'input.webm', await fetchFile(blob));
+        if (!ffmpegInstance) ffmpegInstance = createFFmpeg({ log: false });
+        if (!ffmpegInstance.isLoaded()) await ffmpegInstance.load();
+        ffmpegInstance.FS('writeFile', 'input.webm', await fetchFile(blob));
         let cmd = [];
         if (format === 'mp4') {
             cmd = ['-i', 'input.webm', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '28', '-c:a', 'aac', '-b:a', '128k', 'out.mp4'];
@@ -343,8 +349,8 @@ async function handleStop(format) {
             cmd = ['-i', 'input.webm', '-c:v', 'libtheora', '-q:v', '7', '-c:a', 'libvorbis', '-q:a', '4', 'out.ogv'];
             outType = 'ogv'; outExt = 'ogv';
         }
-        await ffmpeg.run(...cmd);
-        const data = ffmpeg.FS('readFile', `out.${outExt}`);
+        await ffmpegInstance.run(...cmd);
+        const data = ffmpegInstance.FS('readFile', `out.${outExt}`);
         outBlob = new Blob([data.buffer], { type: `video/${outType}` });
     }
     const url = URL.createObjectURL(outBlob);
@@ -357,9 +363,9 @@ async function handleStop(format) {
     downloadLink.href = url;
     downloadLink.download = `capture_${getNowStr()}.${outExt}`;
     downloadLink.style.display = '';
-    downloadLink.textContent = `動画をダウンロード(${outType})`;
+    downloadLink.textContent = t('download_link').replace('{type}', outType);
     addCaptureHistory(url, getNowStr());
-    status.textContent = '録画完了！ダウンロードできます';
+    status.textContent = t('status_done');
 }
 downloadLink.addEventListener('click', function() {
     if (downloadLink.href && downloadLink.style.display !== 'none') {
