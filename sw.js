@@ -1,9 +1,11 @@
-const CACHE_NAME = 'aro-recorder-v1';
+const CACHE_NAME = 'aro-recorder-v2';
 const urlsToCache = [
   '/',
   '/index.html',
   '/style.css',
   '/main.js',
+  '/lang.js',
+  '/changelog.html',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',

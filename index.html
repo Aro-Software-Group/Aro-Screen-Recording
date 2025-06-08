@@ -13,10 +13,19 @@
 </head>
 <body>
     <div class="container">
-        <h1>Aro Screen Recording 2.0</h1>
+        <h1 data-i18n="title">Aro Screen Recording 2.0</h1>
+        <a href="changelog.html" id="changelog-link" class="download-link" style="max-width:200px;margin:0 auto 10px auto;" data-i18n="changelog">更新履歴</a>
         <div class="controls">
             <div class="input-group">
-                <label for="resolution">解像度 (アスペクト比):</label>
+                <label for="language" data-i18n="language">言語:</label>
+                <select id="language">
+                    <option value="ja">日本語</option>
+                    <option value="en">English</option>
+                    <option value="zh">中文</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="resolution" data-i18n="resolution_label">解像度 (アスペクト比):</label>
                 <select id="resolution">
                     <option value="3840x2160">4K (3840x2160, 16:9)</option>
                     <option value="2560x1440">QHD (2560x1440, 16:9)</option>
@@ -28,7 +37,7 @@
                     <option value="1280x960">SXGA- (1280x960, 4:3)</option>
                     <option value="1024x768">XGA (1024x768, 4:3)</option>
                 </select>
-                <label for="fps">FPS:</label>
+                <label for="fps" data-i18n="fps_label">FPS:</label>
                 <select id="fps">
                     <option value="30">30</option>
                     <option value="60">60</option>
@@ -37,21 +46,21 @@
                     <option value="165">165</option>
                     <option value="240">240 (最高)</option>
                 </select>
-                <label for="format">形式:</label>
+                <label for="format" data-i18n="format_label">形式:</label>
                 <select id="format">
                     <option value="webm">WebM（推奨）</option>
                     <option value="mp4">MP4（高互換）</option>
                     <option value="gif">GIF（超軽量・短時間）</option>
                     <option value="ogv">Ogg/Theora（軽量）</option>
                 </select>
-                <label for="mic">マイク音声:</label>
-                <input type="checkbox" id="mic" checked> 有効
+                <label for="mic" data-i18n="mic_label">マイク音声:</label>
+                <input type="checkbox" id="mic" checked> <span id="mic-enable" data-i18n="mic_enabled">有効</span>
             </div>
             <div class="button-group">
-                <button id="startBtn">録画開始</button>
-                <button id="pauseBtn" style="display:none">一時停止</button>
-                <button id="resumeBtn" style="display:none">再開</button>
-                <button id="stopBtn" disabled>録画停止</button>
+                <button id="startBtn" data-i18n="start_btn">録画開始</button>
+                <button id="pauseBtn" style="display:none" data-i18n="pause_btn">一時停止</button>
+                <button id="resumeBtn" style="display:none" data-i18n="resume_btn">再開</button>
+                <button id="stopBtn" disabled data-i18n="stop_btn">録画停止</button>
             </div>
         </div>
         <div id="progress-indicator">
@@ -60,17 +69,18 @@
         <canvas id="audio-waveform" height="44" style="width:100%;max-width:800px;background:#f7faff;border-radius:10px;margin-bottom:12px;display:none;"></canvas>
         <video id="preview" controls autoplay muted style="width:100%;max-width:800px;"></video>
         <div id="history-container">
-            <h2>キャプチャー履歴</h2>
+            <h2 data-i18n="capture_history">キャプチャー履歴</h2>
             <ul id="history-list"></ul>
-            <h2>ダウンロード履歴</h2>
+            <h2 data-i18n="download_history">ダウンロード履歴</h2>
             <ul id="download-list"></ul>
         </div>
-        <a id="downloadLink" style="display:none;">動画をダウンロード(mp4)</a>
+        <a id="downloadLink" style="display:none;" data-i18n="download_link">動画をダウンロード(mp4)</a>
         <div id="status"></div>
         <button id="toggle-dark" style="position:absolute;top:18px;right:18px;">🌙/☀️</button>
         <footer class="copyright">&copy; 2025 Aro Software Group</footer>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.5/dist/ffmpeg.min.js"></script>
+    <script src="lang.js"></script>
     <script src="main.js"></script>
     <script>
       if ('serviceWorker' in navigator) {
