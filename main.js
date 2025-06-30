@@ -333,112 +333,200 @@ document.addEventListener('DOMContentLoaded', () => {
     setupPreview();
 });
 
-startBtn.onclick = async () => {
-    resetState();
-    showPauseResume('recording');
-    sizeAcc = 0;
-    showWaveform(false);
-    const [w, h] = resolutionSel.value.split('x').map(Number);
-    const fps = Number(fpsSel.value);
-    const format = formatSel.value;
-    const useMic = micCheckbox && micCheckbox.checked;
-    status.textContent = t('status_select_screen');
-    try {
-        const displayStream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-                width: w, height: h,
-                frameRate: { ideal: fps, max: fps },
-                resizeMode: 'none',
-                colorSpace: 'rec2020',
-            },
-            audio: true
-        });
-        displayStream.getVideoTracks().forEach(t => {
-            t.addEventListener('ended', () => {
-                if (mediaRecorder && mediaRecorder.state === 'recording') stopBtn.click();
-            });
-        });
-        let audioStream = null;
-        if (useMic) {
-            try {
-                audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-            } catch (e) {}
-        }
-        // videoのみdisplayStreamから、audioはdisplayStreamとaudioStreamをミックス
-        const tracks = [...displayStream.getVideoTracks()];
-        const audioTracks = [];
-        if (displayStream.getAudioTracks().length > 0) audioTracks.push(displayStream.getAudioTracks()[0]);
-        if (audioStream && audioStream.getAudioTracks().length > 0) audioTracks.push(audioStream.getAudioTracks()[0]);
-        if (audioTracks.length > 0) {
-            audioTracks.forEach(track => tracks.push(track));
-        }
-        const mixedStream = new MediaStream(tracks);
-        preview.srcObject = mixedStream;
-        recordedChunks = [];
-        let mimeType = 'video/webm;codecs=vp9,opus';
-        if (!MediaRecorder.isTypeSupported(mimeType)) {
-            mimeType = 'video/webm';
-        }
-        // 画質・fpsに応じてビットレート自動調整
-        let videoBitsPerSecond = 4000000;
-        if (w * h >= 3840 * 2160) videoBitsPerSecond = 25000000; // 4K
-        else if (w * h >= 2560 * 1440) videoBitsPerSecond = 12000000; // QHD
-        else if (w * h >= 1920 * 1080) videoBitsPerSecond = 8000000; // FHD
-        else if (w * h >= 1280 * 720) videoBitsPerSecond = 5000000; // HD
-        if (fps >= 120) videoBitsPerSecond = Math.max(videoBitsPerSecond, 12000000);
-        if (fps >= 144) videoBitsPerSecond = Math.max(videoBitsPerSecond, 16000000);
-        if (fps >= 165) videoBitsPerSecond = Math.max(videoBitsPerSecond, 20000000);
-        if (fps >= 240) videoBitsPerSecond = Math.max(videoBitsPerSecond, 28000000);
-        mediaRecorder = new MediaRecorder(mixedStream, {
-            mimeType,
-            videoBitsPerSecond,
-            audioBitsPerSecond: 192000
-        });
-        mediaRecorder.ondataavailable = e => {
-            if (e.data && e.data.size > 0) {
-                recordedChunks.push(e.data);
-                sizeAcc += e.data.size;
-            }
-            updateProgress();
-        };
-        // onstopはここで一度だけ
-        mediaRecorder.onstop = () => handleStop(formatSel.value);
-        mediaRecorder.onerror = e => {
-            status.textContent = t('status_error_prefix') + (e.error ? e.error.message : e.message);
-        };
-        mediaRecorder.onpause = () => {
-            pausedAt = Date.now();
-            pauseBtn.disabled = true;
-            resumeBtn.disabled = false;
-            status.textContent = t('status_paused');
-            showPauseResume('paused');
-        };
-        mediaRecorder.onresume = () => {
-            totalPaused += Date.now() - pausedAt;
-            pauseBtn.disabled = false;
-            resumeBtn.disabled = true;
-            status.textContent = t('status_recording');
+// Enhanced recording start with better error handling and validation
+if (startBtn) {
+    startBtn.onclick = async () => {
+        try {
+            resetState();
             showPauseResume('recording');
-        };
-        mediaRecorder.start();
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        pauseBtn.disabled = false;
-        resumeBtn.disabled = true;
-        status.textContent = t('status_recording');
-        startTimer();
-        // 音声波形セットアップ
-        if (audioTracks.length > 0) {
-            const audioWaveStream = new MediaStream([audioTracks[0]]);
-            await setupWaveform(audioWaveStream);
-            showWaveform(true);
+            appState.sizeAcc = 0;
+            showWaveform(false);
+            
+            // Validate inputs
+            if (!resolutionSel || !fpsSel || !formatSel) {
+                throw new Error('Required form elements not found');
+            }
+            
+            const [w, h] = resolutionSel.value.split('x').map(Number);
+            const fps = Number(fpsSel.value);
+            const format = formatSel.value;
+            const useMic = micCheckbox && micCheckbox.checked;
+            
+            safeSetTextContent(status, t('status_select_screen'));
+            
+            // Enhanced display media constraints
+            const displayStream = await navigator.mediaDevices.getDisplayMedia({
+                video: {
+                    width: { ideal: w, max: w },
+                    height: { ideal: h, max: h },
+                    frameRate: { ideal: fps, max: fps },
+                    resizeMode: 'crop-and-scale',
+                    displaySurface: 'monitor'
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            
+            // Enhanced stream management
+            appState.stream = displayStream;
+            
+            displayStream.getVideoTracks().forEach(track => {
+                track.addEventListener('ended', () => {
+                    console.log('Display stream ended, stopping recording');
+                    if (appState.mediaRecorder && appState.mediaRecorder.state === 'recording') {
+                        stopBtn.click();
+                    }
+                });
+            });
+            
+            let audioStream = null;
+            if (useMic) {
+                try {
+                    audioStream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }, 
+                        video: false 
+                    });
+                } catch (micError) {
+                    console.warn('Microphone access failed:', micError);
+                    safeSetTextContent(status, 'Microphone access failed, continuing without mic audio');
+                }
+            }
+            
+            // Enhanced audio mixing
+            const tracks = [...displayStream.getVideoTracks()];
+            const audioTracks = [];
+            
+            if (displayStream.getAudioTracks().length > 0) {
+                audioTracks.push(displayStream.getAudioTracks()[0]);
+            }
+            if (audioStream && audioStream.getAudioTracks().length > 0) {
+                audioTracks.push(audioStream.getAudioTracks()[0]);
+            }
+            
+            audioTracks.forEach(track => tracks.push(track));
+            
+            const mixedStream = new MediaStream(tracks);
+            
+            if (preview) {
+                preview.srcObject = mixedStream;
+            }
+            
+            appState.recordedChunks = [];
+            
+            // Enhanced MIME type selection
+            const mimeTypes = [
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=vp8,opus', 
+                'video/webm;codecs=h264,opus',
+                'video/webm'
+            ];
+            
+            let mimeType = mimeTypes.find(type => MediaRecorder.isTypeSupported(type)) || 'video/webm';
+            
+            // Enhanced bitrate calculation
+            let videoBitsPerSecond = calculateOptimalBitrate(w, h, fps);
+            
+            const recorderOptions = {
+                mimeType,
+                videoBitsPerSecond,
+                audioBitsPerSecond: 192000
+            };
+            
+            appState.mediaRecorder = new MediaRecorder(mixedStream, recorderOptions);
+            
+            // Enhanced event handlers
+            appState.mediaRecorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) {
+                    appState.recordedChunks.push(e.data);
+                    appState.sizeAcc += e.data.size;
+                    updateProgress();
+                }
+            };
+            
+            appState.mediaRecorder.onstop = () => handleStop(format);
+            
+            appState.mediaRecorder.onerror = (e) => {
+                const errorMsg = e.error ? e.error.message : e.message;
+                console.error('MediaRecorder error:', errorMsg);
+                safeSetTextContent(status, t('status_error_prefix') + errorMsg);
+                resetState();
+            };
+            
+            appState.mediaRecorder.onpause = () => {
+                appState.pausedAt = Date.now();
+                appState.isPaused = true;
+                if (pauseBtn) pauseBtn.disabled = true;
+                if (resumeBtn) resumeBtn.disabled = false;
+                safeSetTextContent(status, t('status_paused'));
+                showPauseResume('paused');
+            };
+            
+            appState.mediaRecorder.onresume = () => {
+                appState.totalPaused += Date.now() - appState.pausedAt;
+                appState.isPaused = false;
+                if (pauseBtn) pauseBtn.disabled = false;
+                if (resumeBtn) resumeBtn.disabled = true;
+                safeSetTextContent(status, t('status_recording'));
+                showPauseResume('recording');
+            };
+            
+            // Start recording
+            appState.mediaRecorder.start(1000); // Collect data every second
+            appState.isRecording = true;
+            
+            // Update UI
+            if (startBtn) startBtn.disabled = true;
+            if (stopBtn) stopBtn.disabled = false;
+            if (pauseBtn) pauseBtn.disabled = false;
+            if (resumeBtn) resumeBtn.disabled = true;
+            
+            safeSetTextContent(status, t('status_recording'));
+            startTimer();
+            
+            // Setup audio waveform
+            if (audioTracks.length > 0) {
+                const audioWaveStream = new MediaStream([audioTracks[0]]);
+                await setupWaveform(audioWaveStream);
+                showWaveform(true);
+            }
+            
+        } catch (error) {
+            console.error('Recording start failed:', error);
+            safeSetTextContent(status, t('status_cancelled') + ': ' + error.message);
+            resetState();
+            showWaveform(false);
         }
-    } catch (e) {
-        status.textContent = t('status_cancelled');
-        resetState();
-        showWaveform(false);
-    }
-};
+    };
+}
+
+// Enhanced bitrate calculation function
+function calculateOptimalBitrate(width, height, fps) {
+    const pixelCount = width * height;
+    let baseBitrate;
+    
+    // Base bitrate based on resolution
+    if (pixelCount >= 3840 * 2160) baseBitrate = 25000000; // 4K
+    else if (pixelCount >= 2560 * 1440) baseBitrate = 12000000; // QHD
+    else if (pixelCount >= 1920 * 1080) baseBitrate = 8000000; // FHD
+    else if (pixelCount >= 1280 * 720) baseBitrate = 5000000; // HD
+    else baseBitrate = 2500000; // SD
+    
+    // Adjust for high frame rates
+    if (fps >= 240) return Math.max(baseBitrate * 1.8, 28000000);
+    if (fps >= 165) return Math.max(baseBitrate * 1.6, 20000000);
+    if (fps >= 144) return Math.max(baseBitrate * 1.4, 16000000);
+    if (fps >= 120) return Math.max(baseBitrate * 1.2, 12000000);
+    if (fps >= 60) return Math.max(baseBitrate * 1.1, baseBitrate);
+    
+    return baseBitrate;
+}
 
 pauseBtn.onclick = () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
